@@ -21,6 +21,8 @@
 #include <sstream>    // stringstream
 #include <stdexcept>  // runtime_error
 #include <string>     // c_str()
+#include <random>
+
 
 // Athena++ headers
 #include "../athena.hpp"
@@ -151,9 +153,9 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   u0 = vflow;
   Real v0 = 0.0;
   Real w0 = 0.0;
-  bx0 = 1.0;
-  by0 = std::sqrt(2.0);
-  bz0 = 0.5;
+  bx0 = 0.0;
+  by0 = 1.0;
+  bz0 = 0.0;
   Real xfact = 0.0;
   Real yfact = 1.0;
   Real h0 = 0.0;
@@ -226,9 +228,9 @@ void Mesh::UserWorkAfterLoop(ParameterInput *pin) {
           Real sn = std::sin(k_par*x);
 
           Real d1 = d0 + amp*sn*rem[0][wave_flag];
-          Real mx = d0*vflow + amp*sn*rem[1][wave_flag];
-          Real my = amp*sn*rem[2][wave_flag];
-          Real mz = amp*sn*rem[3][wave_flag];
+          Real mx = d0*vflow;
+          Real my = 0.0;
+          Real mz = 0.0;
           Real m1 = mx*cos_a2*cos_a3 - my*sin_a3 - mz*sin_a2*cos_a3;
           Real m2 = mx*cos_a2*sin_a3 + my*cos_a3 - mz*sin_a2*sin_a3;
           Real m3 = mx*sin_a2                    + mz*cos_a2;
@@ -526,8 +528,9 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     for (int k=ks; k<=ke; k++) {
       for (int j=js; j<=je; j++) {
         for (int i=is; i<=ie+1; i++) {
-          pfield->b.x1f(k,j,i) = (a3(k  ,j+1,i) - a3(k,j,i))/pcoord->dx2f(j) -
-                                 (a2(k+1,j  ,i) - a2(k,j,i))/pcoord->dx3f(k);
+          Real x = pcoord->x2v(j);
+          Real sn = std::sin(k_par*x);
+          pfield->b.x1f(k,j,i) = amp * sn;
         }
       }
     }
@@ -535,8 +538,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     for (int k=ks; k<=ke; k++) {
       for (int j=js; j<=je+1; j++) {
         for (int i=is; i<=ie; i++) {
-          pfield->b.x2f(k,j,i) = (a1(k+1,j,i  ) - a1(k,j,i))/pcoord->dx3f(k) -
-                                 (a3(k  ,j,i+1) - a3(k,j,i))/pcoord->dx1f(i);
+          pfield->b.x2f(k,j,i) = by0;
         }
       }
     }
@@ -544,8 +546,9 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     for (int k=ks; k<=ke+1; k++) {
       for (int j=js; j<=je; j++) {
         for (int i=is; i<=ie; i++) {
-          pfield->b.x3f(k,j,i) = (a2(k,j  ,i+1) - a2(k,j,i))/pcoord->dx1f(i) -
-                                 (a1(k,j+1,i  ) - a1(k,j,i))/pcoord->dx2f(j);
+          Real x = pcoord->x2v(j);
+          Real sn = std::sin(k_par*x);
+          pfield->b.x3f(k,j,i) = amp * sn;
         }
       }
     }
@@ -558,17 +561,24 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         Real x = cos_a2*(pcoord->x1v(i)*cos_a3 + pcoord->x2v(j)*sin_a3) +
                  pcoord->x3v(k)*sin_a2;
         Real sn = std::sin(k_par*x);
-        phydro->u(IDN,k,j,i) = d0 + amp*sn*rem[0][wave_flag];
-        Real mx = d0*vflow + amp*sn*rem[1][wave_flag];
-        Real my = amp*sn*rem[2][wave_flag];
-        Real mz = amp*sn*rem[3][wave_flag];
+        
+        std::random_device rd;  // Non-deterministic random seed (hardware-based if possible)
+        std::mt19937 gen(rd()); // Mersenne Twister random number engine (fast and high-quality)
+        std::uniform_real_distribution<> dis(-1.0, 1.0);
+
+        phydro->u(IDN, k, j, i) = d0 + amp * dis(gen);
+        std::cout << "Random number between -1 and 1: " << phydro->u(IDN, k, j, i) << std::endl;
+
+        Real mx = d0*vflow;
+        Real my = 0.0;
+        Real mz = 0.0;
 
         phydro->u(IM1,k,j,i) = mx*cos_a2*cos_a3 - my*sin_a3 - mz*sin_a2*cos_a3;
         phydro->u(IM2,k,j,i) = mx*cos_a2*sin_a3 + my*cos_a3 - mz*sin_a2*sin_a3;
         phydro->u(IM3,k,j,i) = mx*sin_a2                    + mz*cos_a2;
 
         if (NON_BAROTROPIC_EOS) {
-          phydro->u(IEN,k,j,i) = p0/gm1 + 0.5*d0*u0*u0 + amp*sn*rem[4][wave_flag];
+          phydro->u(IEN,k,j,i) = p0/gm1 + 0.5*d0*u0*u0;
           if (MAGNETIC_FIELDS_ENABLED) {
             phydro->u(IEN,k,j,i) += 0.5*(bx0*bx0+by0*by0+bz0*bz0);
           }
