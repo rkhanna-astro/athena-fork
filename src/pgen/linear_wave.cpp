@@ -36,9 +36,14 @@
 #include "../parameter_input.hpp"
 #include "../reconstruct/reconstruction.hpp"
 
+
 #ifdef MPI_PARALLEL
 #include <mpi.h>
 #endif
+
+// void DMRInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+//   Real time, Real dt,
+//   int il, int iu, int jl, int ju, int kl, int ku, int ngh);
 
 namespace {
 // Parameters which define initial solution -- made global so that they can be shared
@@ -88,7 +93,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   ang_2_vert = pin->GetOrAddBoolean("problem", "ang_2_vert", false);
   ang_3_vert = pin->GetOrAddBoolean("problem", "ang_3_vert", false);
 
-  // initialize global variables
+  // initialize global variables  
   if (NON_BAROTROPIC_EOS) {
     gam   = pin->GetReal("hydro", "gamma");
     gm1 = (gam - 1.0);
@@ -133,7 +138,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   Real x3 = x3size*sin_a2;
 
   // For lambda choose the smaller of the 3
-  lambda = x1;
+  lambda = 2 * x1;
   if (f2 && ang_3 != 0.0) lambda = std::min(lambda,x2);
   if (f3 && ang_2 != 0.0) lambda = std::min(lambda,x3);
 
@@ -154,7 +159,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   Real v0 = 0.0;
   Real w0 = 0.0;
   bx0 = 0.0;
-  by0 = 1.0;
+  by0 = 1.58;
   bz0 = 0.0;
   Real xfact = 0.0;
   Real yfact = 1.0;
@@ -181,6 +186,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   // primarily used for tests of decaying linear waves (might conditionally enroll):
   AllocateUserHistoryOutput(1);
   EnrollUserHistoryOutput(0, MaxV2, "max-v2", UserHistoryOperation::max);
+  // EnrollUserBoundaryFunction(BoundaryFace::inner_x2, DMRInnerX2);
   return;
 }
 
@@ -528,9 +534,19 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     for (int k=ks; k<=ke; k++) {
       for (int j=js; j<=je; j++) {
         for (int i=is; i<=ie+1; i++) {
-          Real x = pcoord->x2v(j);
-          Real sn = std::sin(k_par*x);
-          pfield->b.x1f(k,j,i) = amp * sn;
+          Real y = pcoord->x2v(j);
+
+          Real sn = std::sin(k_par*y);
+          // Real sn2 = std::sin(2.0*k_par*x);
+          // Real sn3 = std::sin(4.0*k_par*x);
+
+          // Real amp3 = amp / 2.0;
+          // Real amp2 = amp / 3.0;
+          // Real amp1 = amp / 6.0;
+
+          // pfield->b.x1f(k,j,i) =  amp1 * sn1 + amp2 * sn2 + amp3 * sn3;
+
+          pfield->b.x1f(k,j,i) =  0;
         }
       }
     }
@@ -548,7 +564,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         for (int i=is; i<=ie; i++) {
           Real x = pcoord->x2v(j);
           Real sn = std::sin(k_par*x);
-          pfield->b.x3f(k,j,i) = amp * sn;
+          pfield->b.x3f(k,j,i) = 0;
         }
       }
     }
@@ -556,18 +572,39 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
   // initialize conserved variables
   for (int k=ks; k<=ke; k++) {
+    // Real linear_density = 1.0;
+    // Real y_grid = 0.0;
+    // Real step = 1.0 / 256;
+
+    // Real scale_height = (iso_cs * iso_cs) / 1.0;
+
     for (int j=js; j<=je; j++) {
+      // linear_density = 1.0;
+
       for (int i=is; i<=ie; i++) {
         Real x = cos_a2*(pcoord->x1v(i)*cos_a3 + pcoord->x2v(j)*sin_a3) +
                  pcoord->x3v(k)*sin_a2;
         Real sn = std::sin(k_par*x);
         
+        // Uinform Density
         std::random_device rd;  // Non-deterministic random seed (hardware-based if possible)
         std::mt19937 gen(rd()); // Mersenne Twister random number engine (fast and high-quality)
         std::uniform_real_distribution<> dis(-1.0, 1.0);
 
         phydro->u(IDN, k, j, i) = d0 + amp * dis(gen);
-        std::cout << "Random number between -1 and 1: " << phydro->u(IDN, k, j, i) << std::endl;
+        // std::cout << "Random number between -1 and 1: " << phydro->u(IDN, k, j, i) << std::endl;
+
+        // Linear Density:
+        // linear_density -= step;
+        // phydro->u(IDN, k, j, i) = linear_density;
+
+        // Exponential Density:
+        // phydro->u(IDN, k, j, i) = std::exp( - y_grid / scale_height);
+
+        // Hyperbolic Secant Density Variation:
+        // phydro->u(IDN, k, j, i) = 1.0 / std::cosh(M_PI * exp_value/ 2.0);
+
+        // std::cout << "Density: " << phydro->u(IDN, k, j, i) << std::endl;
 
         Real mx = d0*vflow;
         Real my = 0.0;
@@ -584,10 +621,32 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
           }
         }
       }
+      // linear_density -= step;
+      // y_grid += step;
     }
   }
   return;
 }
+
+// void DMRInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+//   Real time, Real dt,
+//   int il, int iu, int jl, int ju, int kl, int ku, int ngh) {
+//     Real amplitude = 0.01;             // Max perturbation strength
+//     Real frequency = 2.0 * M_PI / 1.0;  // One cycle per time unit
+
+//     Real perturb = amplitude * std::sin(frequency * time / 10.0);
+
+//     // copy face-centered magnetic fields into ghost zones
+//     for (int k=kl; k<=ku; ++k) {
+//       for (int j=1; j<=ngh; ++j) {
+// #pragma omp simd
+//         for (int i=il; i<=iu; ++i) {
+//           b.x1f(k, jl-j, i) = perturb;
+//         }
+//       }
+//     }
+//   return;
+// }
 
 namespace {
 //----------------------------------------------------------------------------------------

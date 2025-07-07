@@ -14,6 +14,8 @@
 #include "../../athena.hpp"
 #include "../../athena_arrays.hpp"
 #include "bvals_fc.hpp"
+#include <iostream>   // endl
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void FaceCenteredBoundaryVariable::OutflowInnerX1(
@@ -94,10 +96,15 @@ void FaceCenteredBoundaryVariable::OutflowInnerX2(
     Real time, Real dt, int il, int iu, int jl, int kl, int ku, int ngh) {
   // copy face-centered magnetic fields into ghost zones
   for (int k=kl; k<=ku; ++k) {
+    Real amplitude = 0.1;             // Max perturbation strength
+    Real frequency = 2.0 * M_PI / 1.0;  // One cycle per time unit
+
+    Real perturb = amplitude * std::sin(frequency * time);
     for (int j=1; j<=ngh; ++j) {
 #pragma omp simd
       for (int i=il; i<=iu+1; ++i) {
-        (*var_fc).x1f(k,(jl-j),i) = (*var_fc).x1f(k,jl,i);
+        (*var_fc).x1f(k,(jl-j),i) = perturb;
+        // (*var_fc).x1f(k,(jl-j),i) = (*var_fc).x1f(k,jl,i);
       }
     }
   }

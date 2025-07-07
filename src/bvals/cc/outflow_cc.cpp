@@ -28,6 +28,7 @@ void CellCenteredBoundaryVariable::OutflowInnerX1(
 #pragma omp simd
         for (int i=1; i<=ngh; ++i) {
           (*var_cc)(n,k,j,il-i) = (*var_cc)(n,k,j,il);
+
         }
       }
     }
