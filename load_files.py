@@ -18,9 +18,11 @@ mag_energy = []
 kin_energy = []
 time_in_myr = []
 
-velocity_x = []
+plot_velocity = []
+plot_dispersion = []
+plot_alfven = []
 
-grid = 512
+grid = 256
 grid_x = np.linspace(0, 1, grid)
 grid_y = np.linspace(0, 1, grid)
 
@@ -30,7 +32,7 @@ for space in spacing:
     # For wavelength 2L - I need 2-pc/1.58-km/s to get desired properties - 15uG, 1.58 km/s and 200 cm-3    ?
     # For wavelength L - I need 1-pc/1.0-km/s to get desired properties - 15uG, 1.58 km/s and 200 cm-3      ?
     # For wavelength L - I need 1-pc/1.0-km/s to get desired properties - 15uG, 1.58 km/s and 200 cm-3      ?
-    unit_base={"length_unit": (1.0,"pc"), "time_unit": (1.0,"1.0 * pc / (1.0 * km/s)"), "mass_unit": (2.2254e34,"g")}
+    unit_base={"length_unit": (1.0,"pc"), "time_unit": (1.0,"1.0 * pc / (0.35 * km/s)"), "mass_unit": (3.532e34,"g")}
     ds = yt.load(f'LinWave.out2.{space:05d}.athdf', units_override=unit_base)
 
 #     for unit in dir(ds.units):
@@ -50,18 +52,37 @@ for space in spacing:
 
     grid = ds.covering_grid(level=0, left_edge=left_edge, dims=dims)
 
-    density = grid['rho'].to("g/cm**3")[:, :, 0]
+    density = grid['rho'].to("g/cm**3")[:, :, 0].T
 #     print(density)
     print(f"X dtype: {X.dtype}, Y dtype: {Y.dtype}, density dtype: {density.dtype}")
 
-    physical_density = grid['rho'].to("g/cm**3")
-#     print("Density", physical_density)
-
     physical_magnetic_field = grid[('gas', 'magnetic_field_y')].to("uG")
-    print("Magnetic Field", physical_magnetic_field)
+    print("Magnetic Field Y", physical_magnetic_field)
 
     physical_magnetic_field_x = grid[('gas', 'magnetic_field_x')].to("uG")
     print("Magnetic Field X", physical_magnetic_field_x)
+
+    velocity_x = grid[('gas', 'velocity_x')].to("km/s")[:, :, 0].T
+    velocity_y = grid[('gas', 'velocity_y')].to("km/s")[:, :, 0].T
+
+    v_squared = (density * ((velocity_x)**2 + velocity_y**2)).sum() / density.sum()
+    v_rms = np.sqrt(v_squared).to("km/s")
+    plot_velocity.append(v_rms)
+    print("RMS velocity", v_rms)
+
+    # print("Velocity X", np.mean(velocity_xx))
+    # print("Velocity Y", np.mean(velocity_y))
+
+    sigma_x = np.std(velocity_x)
+    sigma_y = np.std(velocity_y)
+    sigma = np.sqrt(sigma_x**2 + sigma_y**2)
+    print("Velocity Dispersion", sigma)
+    plot_dispersion.append(sigma)
+
+    # mean_velocity_x = np.sum(density * velocity_x) / np.sum(density)
+    # mean_velocity_y = np.sum(density * velocity_y) / np.sum(density)
+    
+    # sigma_x = np.sqrt( (density * (velocity_x - mean_velocity_x)**2).sum()
 
 #     mangetic_energy = grid[('gas', 'magnetic_energy_density')]
 #     volume = grid[('gas', 'volume')]
@@ -73,25 +94,22 @@ for space in spacing:
     kin_energy.append(total_kin_energy)
 #     print("Magnetic Field X", total_mag_energy)
 
-    vel_x = grid[('gas', 'velocity_y')].to('km/s')[:, :, 0]
-    velocity_x.append(vel_x[128, 128])
-
-
     time_evolved = ds.current_time.to("Myr")
-    print("Time", ds.current_time.to("Myr"))
+    # print("Time", ds.current_time.to("Myr"))
 
 
-#     alfven_speed = grid[('gas', 'alfven_speed')].to("km/s")
-#     print("Alfven Speed", alfven_speed)
+    alfven_speed = grid[('gas', 'alfven_speed')].to("km/s")
+    print("Alfven Speed", np.mean(alfven_speed))
+    plot_alfven.append(np.mean(alfven_speed))
 
 
 #     number_density = grid[('gas', 'number_density')].to("cm**-3")[:, :, 0]
 #     print("Number Density", number_density)
 
     accurate_number_density = grid['rho'].to("g/cm**3") / (2.34 * mh)
-    number_density = accurate_number_density.to("cm**-3")[:, :, 0]
+    number_density = accurate_number_density.to("cm**-3")[:, :, 0].T
     print(number_density.shape)
-    print("Accurate Number Density", accurate_number_density)
+    # print("Accurate Number Density", accurate_number_density)
     
     mass_of_mc = grid[('gas', 'cell_mass')].to("g").sum()
     total_mass.append(mass_of_mc)
@@ -124,25 +142,25 @@ for space in spacing:
 
     plt.figure(figsize=(6, 5))
     print(X.dtype, Y.dtype, number_density.dtype)
-    plt.pcolormesh(X, Y, number_density.T, cmap='hot', shading='auto', vmin = 100, vmax = 250)
+    plt.pcolormesh(X, Y, number_density, cmap='gray', shading='auto', vmin = 100, vmax = 300)
     plt.title(f'Number Density Map (time={time_evolved:.4f})')
-
-
     plt.colorbar(label=r'Number Density (cm$^{-3}$)')
     plt.xlabel('x (1 pc)')
     plt.ylabel('y (1 pc)')
     plt.savefig(f'density_map_{time_evolved:.4f}.png', dpi=300, bbox_inches='tight')
-
-    
+    plt.close()
+    # if time_step == 1:
+    #     break
 
 # Plot the total mass
 # plt.figure(figsize=(6, 5))
 # # plt.plot(time_in_myr, mag_energy, label='magnetic energy density')
-# plt.plot(time_in_myr, mag_energy, label='magnetic_energy_density')
+# plt.plot(time_in_myr, plot_velocity, label='rms_velocity')
+# plt.plot(time_in_myr, plot_dispersion, label='sigma')
 # plt.yscale('log')
 # plt.legend()
 # plt.xlabel('Time (MYr)')
-# plt.ylabel('Velocity_x (km/s)')
+# plt.ylabel('Velocity RMS (km/s)')
 # plt.show()
 
 #     [('athena_pp', 'Bcc1'), ('athena_pp', 'Bcc2'), ('athena_pp', 'Bcc3'), ('athena_pp', 'cell_volume'), ('athena_pp', 'dx'), ('athena_pp', 'dy'), ('athena_pp', 'dz'), ('athena_pp', 'path_element_x'), ('athena_pp', 'path_element_y'), ('athena_pp', 'path_element_z'), ('athena_pp', 'rho'), ('athena_pp', 'vel1'), ('athena_pp', 'vel2'), ('athena_pp', 'vel3'), ('athena_pp', 'volume'), ('athena_pp', 'x'), ('athena_pp', 'y'), ('athena_pp', 'z'), 

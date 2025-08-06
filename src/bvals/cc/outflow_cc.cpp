@@ -63,12 +63,25 @@ void CellCenteredBoundaryVariable::OutflowOuterX1(
 
 void CellCenteredBoundaryVariable::OutflowInnerX2(
     Real time, Real dt, int il, int iu, int jl, int kl, int ku, int ngh) {
+  Real iso_cs = 1.0;
+  Real g = 1.0;
+
   for (int n=0; n<=nu_; ++n) {
     for (int k=kl; k<=ku; ++k) {
+      Real y_grid = 0.0;
+      Real step = 1.0 / 256.0;
+      Real scale_height = (iso_cs * iso_cs) / g;
+
       for (int j=1; j<=ngh; ++j) {
 #pragma omp simd
+        y_grid -= step;
         for (int i=il; i<=iu; ++i) {
-          (*var_cc)(n,k,jl-j,i) = (*var_cc)(n,k,jl,i);
+          if (n == IDN) {
+            (*var_cc)(IDN,k,jl-j,i) = std::exp(-y_grid / scale_height);
+          }
+          else {
+            (*var_cc)(n,k,jl-j,i) = (*var_cc)(n,k,jl,i);
+          }
         }
       }
     }
@@ -83,12 +96,25 @@ void CellCenteredBoundaryVariable::OutflowInnerX2(
 
 void CellCenteredBoundaryVariable::OutflowOuterX2(
     Real time, Real dt, int il, int iu, int ju, int kl, int ku, int ngh) {
+  Real iso_cs = 1.0;
+  Real g = 1.0;
+
   for (int n=0; n<=nu_; ++n) {
     for (int k=kl; k<=ku; ++k) {
+      Real y_grid = 1.0;
+      Real step = 1.0 / 256.0;
+      Real scale_height = (iso_cs * iso_cs) / g;
+
       for (int j=1; j<=ngh; ++j) {
 #pragma omp simd
+        y_grid += step;
         for (int i=il; i<=iu; ++i) {
-          (*var_cc)(n,k,ju+j,i) = (*var_cc)(n,k,ju,i);
+          if (n == IDN) {
+            (*var_cc)(IDN,k,ju+j,i) = std::exp(-y_grid / scale_height);
+          }
+          else {
+            (*var_cc)(n,k,ju+j,i) = (*var_cc)(n,k,ju,i);
+          }
         }
       }
     }

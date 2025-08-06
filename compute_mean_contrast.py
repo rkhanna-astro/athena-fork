@@ -40,6 +40,12 @@ for space in spacing:
     accurate_number_density_256 = data_256['rho'].to("g/cm**3") / (2.34 * mh)
     number_density = accurate_number_density_256.to("cm**-3")[:, :, 0].T
 
+    velocity_x = data_256[('gas', 'velocity_x')].to("km/s")[:, : , 0].T
+
+    velocity_y = data_256[('gas', 'velocity_y')].to("km/s")[:, :, 0].T
+
+    v_rms = np.sqrt(velocity_x**2 + velocity_y**2)
+
     data = number_density
 
     extrema_coords_max = []
@@ -75,14 +81,12 @@ for space in spacing:
 
         plt.figure(figsize=(6, 5))
         plt.pcolormesh(X, Y, data, cmap='hot', shading='auto', vmin = 100, vmax = 250)
-        ys, xs = zip(*extrema_coords_max)
-        plt.scatter(xs, ys, color='cyan', marker='^', s=10, label='Crests')
+        # ys, xs = zip(*extrema_coords_max)
+        # plt.scatter(xs, ys, color='cyan', marker='^', s=10, label='Crests')
 
-        ys, xs = zip(*extrema_coords_min)
-        plt.scatter(xs, ys, color='lime', marker='v', s=10, label='Troughs')
+        # ys, xs = zip(*extrema_coords_min)
+        # plt.scatter(xs, ys, color='lime', marker='v', s=10, label='Troughs')
         plt.title(f'Number Density Map (time={1:.4f})')
-
-
         plt.colorbar(label=r'Number Density (cm$^{-3}$)')
         plt.xlabel('x (1 pc)')
         plt.ylabel('y (1 pc)')

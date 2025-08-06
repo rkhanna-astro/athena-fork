@@ -2,6 +2,8 @@
 Makefile
 src/defs.hpp
 configure.log
+venv
+venv/pyvenv.cfg
 
 # Object and binary directories
 obj/

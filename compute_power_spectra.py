@@ -11,47 +11,7 @@ from scipy.fft import fft, fftshift
 from astropy.timeseries import LombScargle
 from scipy.signal import welch
 
-def downsample_to(target_shape, data):
-    factor = np.array(target_shape) / np.array(data.shape)
-    return zoom(data, factor, order=1)  # linear interpolation
-
-def l2_error(ref, test):
-    return np.sqrt(np.sum((ref - test)**2) / np.sum(ref**2))
-
-def compute_power_spectrum_2d(data, apply_window=True):
-    """Compute 2D power spectrum and return 1D radial average."""
-    if hasattr(data, "value"):
-        data = data.value  # strip unyt if needed
-
-    # Remove mean
-    data = data - np.mean(data)
-
-    # # Apply Hann window to suppress FFT edge ringing
-    # if apply_window:
-    #     ny, nx = data.shape
-    #     window = hann(ny)[:, None] * hann(nx)
-    #     data *= window
-
-    # 2D FFT and power spectrum
-    fft2d = np.fft.fft2(data)
-    power_2d = np.abs(fft2d)**2
-    power_2d = np.fft.fftshift(power_2d)
-
-
-    # Get 1D radial profile
-    y, x = np.indices(data.shape)
-    center = np.array([(x.max() - x.min()) / 2.0, (y.max() - y.min()) / 2.0])
-    r = np.sqrt((x - center[0])**2 + (y - center[1])**2)
-    r = r.astype(int)
-
-    # Radial binning
-    tbin = np.bincount(r.ravel(), power_2d.ravel())
-    nr = np.bincount(r.ravel())
-    radial_profile = tbin / np.maximum(nr, 1)
-
-    return radial_profile
-
-spacing = [100]
+spacing = [400]
 
 time_step = 0
 
@@ -59,11 +19,11 @@ for space in spacing:
     # For wavelength 2L - I need 2-pc/1.58-km/s to get desired properties - 15uG, 1.58 km/s and 200 cm-3    ?
     # For wavelength L - I need 1-pc/1.0-km/s to get desired properties - 15uG, 1.58 km/s and 200 cm-3      ?
     # For wavelength L - I need 1-pc/1.0-km/s to get desired properties - 15uG, 1.58 km/s and 200 cm-3      ?
-    unit_base={"length_unit": (1.0,"pc"), "time_unit": (1.0,"1.0 * pc / (1.0 * km/s)"), "mass_unit": (2.225e34,"g")}
+    unit_base={"length_unit": (1.0,"pc"), "time_unit": (1.0,"1.0 * pc / (0.35 * km/s)"), "mass_unit": (3.532e34,"g")}
 
-    ds_256 = yt.load(f'./time-varying-field/512/LinWave.out2.{space:05d}.athdf', units_override=unit_base)
+    ds_256 = yt.load(f'./LinWave.out2.{space:05d}.athdf', units_override=unit_base)
 
-    size = 512
+    size = 256
     grid_x = np.linspace(0, 1, size)
     grid_y = np.linspace(0, 1, size)
 
@@ -74,17 +34,26 @@ for space in spacing:
     # print(left_edge, dims)
 
     data_256 = ds_256.covering_grid(level=0, left_edge=left_edge, dims=dims)
+    density = data_256['rho'].to("g/cm**3")[:, :, 0].T
 
     accurate_number_density_256 = data_256['rho'].to("g/cm**3") / (2.34 * mh)
     number_density = accurate_number_density_256.to("cm**-3")[:, :, 0].T
 
-    velocity_x = data_256[('gas', 'velocity_x')].to("km/s")[:, : , 0].T
+    velocity_x = data_256[('gas', 'velocity_x')].to("km/s")[:, :, 0].T
+    velocity_y = data_256[('gas', 'velocity_y')].to("km/s")[:, :, 0].T
+
+    time_evolved = ds_256.current_time.to("Myr")
+
+    # vrms = np.sqrt(velocity_x**2 + velocity_y**2)
 
     magnetic_field_y = data_256[('gas', 'magnetic_field_y')].to("uG")[:, : , 0].T
 
     averaged_number_density = np.zeros((int(size / 16), size))
     velocity_plot = np.zeros((int(size / 16), size))
     magnetic_plot = np.zeros((int(size / 16), size))
+
+    plot_velocity_x = np.zeros((int(size / 16), size))
+    plot_velocity_y = np.zeros((int(size / 16), size))
 
     for x in range(16, size, 16):
             averaged_value = (number_density[x-1] + number_density[x] + number_density[x+1]) / 3.0
@@ -95,6 +64,8 @@ for space in spacing:
 
             magnetic_plot[int(x / 16)] = (magnetic_field_y[x-1] + magnetic_field_y[x] + magnetic_field_y[x+1]) / 3.0
 
+            plot_velocity_x[int(x / 16)] = ((velocity_x[x-1] + velocity_x[x] + velocity_x[x+1] / 3.0))**2
+            plot_velocity_y[int(x / 16)] = ((velocity_y[x-1] + velocity_y[x] + velocity_y[x+1] / 3.0))**2
     # print(averaged_number_density)
 
 
@@ -110,6 +81,7 @@ for space in spacing:
 
 for ind in range(16, size, 16):
     i = int(ind / 16)
+    print(i)
 
     signal = averaged_number_density[i]
     vel_signal = velocity_plot[i]
@@ -120,25 +92,48 @@ for ind in range(16, size, 16):
     f2, P2 = welch(vel_signal, fs=256, scaling='density')
     f3, P3 = welch(mag_signal, fs=256, scaling='density')
 
-    P_rho_norm = P1 / np.trapezoid(P1, f1)
-    P_vel_norm = P2 / np.trapezoid(P2, f2)
-    P_mag_norm = P3 / np.trapezoid(P3, f3)
+    # P_rho_norm = P1 / np.trapezoid(P1, f1)
+    # P_vel_norm = P2 / np.trapezoid(P2, f2)
+    # P_mag_norm = P3 / np.trapezoid(P3, f3)
 
     # first_10_indices = np.arange(1, 25)   # k = 1 to 10
 
-    plt.figure(figsize=(8, 8))
-    plt.plot(f1[:25], P_rho_norm[:25], label="density")
-    plt.plot(f2[:25], P_vel_norm[:25], label="velocity")
-    plt.plot(f3[:25], P_mag_norm[:25], label="magnetic")
+    vx = plot_velocity_x[i]
+    vy = plot_velocity_y[i]
 
+    v_mag = np.sqrt(vx + vy)
+    v_rms = np.sqrt(np.mean(v_mag**2))
+    dispersion = np.std(v_mag)
+    smoothed_profile = gaussian_filter1d(v_mag, sigma=4.0)
+    # mean_v = np.mean(v_mag)
+
+    plt.figure(figsize=(8, 8))
+    # plt.plot(f1[:25], P_rho_norm[:25], label="density")
+    # plt.plot(f2[:25], P_vel_norm[:25], label="velocity")
+    # plt.plot(f3[:25], P_mag_norm[:25], label="magnetic")
+
+    # plt.legend()
+    # plt.xlabel("k (wavenumber)")
+    # plt.ylabel("Power")
+    # plt.title("1D Power Spectrum of Density, Velocity, Magnetic Field")
+    # plt.grid(True, which="both", ls="--", alpha=0.5)
+    # plt.tight_layout()
+    # # plt.show()
+    # plt.savefig(f'power_spectra_comparison_{i}.png', dpi=300, bbox_inches='tight')
+
+    plt.plot(grid_x, v_mag, label="velocity_magnitude")
+    plt.axhline(v_rms, color='red', linestyle="--", label=f'v_rms = {v_rms:.4f}')
+    plt.fill_between(grid_x, v_rms - dispersion, v_rms + dispersion, color = 'grey', alpha = 0.3, label ='dispersion region')
+    plt.plot(grid_x, smoothed_profile, label="smooth velocity magnitude profile")
     plt.legend()
-    plt.xlabel("k (wavenumber)")
-    plt.ylabel("Power")
-    plt.title("1D Power Spectrum of Density, Velocity, Magnetic Field")
+    plt.xlabel("x (pc)")
+    plt.ylabel("velocity rms")
+    plt.title(f'Velocity variation perpendicular to striations (time = {time_evolved:.4f})')
     plt.grid(True, which="both", ls="--", alpha=0.5)
     plt.tight_layout()
     # plt.show()
-    plt.savefig(f'power_spectra_comparison_{i}.png', dpi=300, bbox_inches='tight')
+    plt.savefig(f'velocity_{i}.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
 
 # print(freqs)

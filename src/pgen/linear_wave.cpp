@@ -573,10 +573,9 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   // initialize conserved variables
   for (int k=ks; k<=ke; k++) {
     // Real linear_density = 1.0;
-    // Real y_grid = 0.0;
-    // Real step = 1.0 / 256;
-
-    // Real scale_height = (iso_cs * iso_cs) / 1.0;
+    Real y_grid = 0.0;
+    Real step = 1.0 / 256.0;
+    Real scale_height = (iso_cs * iso_cs) / 1.0;
 
     for (int j=js; j<=je; j++) {
       // linear_density = 1.0;
@@ -590,8 +589,10 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         std::random_device rd;  // Non-deterministic random seed (hardware-based if possible)
         std::mt19937 gen(rd()); // Mersenne Twister random number engine (fast and high-quality)
         std::uniform_real_distribution<> dis(-1.0, 1.0);
+        std::uniform_real_distribution<> prob(0.0, 1.0);
+        // std::normal_distribution<> nor(0.0, amp);
 
-        phydro->u(IDN, k, j, i) = d0 + amp * dis(gen);
+        // phydro->u(IDN, k, j, i) = d0 + amp * dis(gen);
         // std::cout << "Random number between -1 and 1: " << phydro->u(IDN, k, j, i) << std::endl;
 
         // Linear Density:
@@ -599,12 +600,21 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         // phydro->u(IDN, k, j, i) = linear_density;
 
         // Exponential Density:
-        // phydro->u(IDN, k, j, i) = std::exp( - y_grid / scale_height);
+        // Real perturb = nor(gen);
+        // if (perturb > amp or perturb < -amp) {
+        //   perturb = 0.0;
+        // }
+        if (prob(gen) > 0.01){ 
+          phydro->u(IDN, k, j, i) = std::exp( - y_grid / scale_height) + amp * dis(gen);
+        }
+        else {
+          phydro->u(IDN, k, j, i) = std::exp( - y_grid / scale_height);
+        }
 
         // Hyperbolic Secant Density Variation:
         // phydro->u(IDN, k, j, i) = 1.0 / std::cosh(M_PI * exp_value/ 2.0);
 
-        // std::cout << "Density: " << phydro->u(IDN, k, j, i) << std::endl;
+        std::cout << "Density: " << phydro->u(IDN, k, j, i) << std::endl;
 
         Real mx = d0*vflow;
         Real my = 0.0;
@@ -622,7 +632,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         }
       }
       // linear_density -= step;
-      // y_grid += step;
+      y_grid += step;
     }
   }
   return;
