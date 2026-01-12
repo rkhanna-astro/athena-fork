@@ -98,10 +98,14 @@ void FaceCenteredBoundaryVariable::ReflectInnerX2(
     Real time, Real dt, int il, int iu, int jl, int kl, int ku, int ngh) {
   // copy face-centered magnetic fields into ghost zones, reflecting b2
   for (int k=kl; k<=ku; ++k) {
+    Real amplitude = 0.6;             // Max perturbation strength
+    Real frequency =  2.0 * M_PI / 1.0;  // One cycle per time unit
     for (int j=1; j<=ngh; ++j) {
 #pragma omp simd
       for (int i=il; i<=iu+1; ++i) {
-        (*var_fc).x1f(k,(jl-j),i) =  (*var_fc).x1f(k,(jl+j-1),i);
+        Real perturb = amplitude * std::sin(frequency * time);
+        (*var_fc).x1f(k,(jl-j),i) = perturb;
+        // (*var_fc).x1f(k,(jl-j),i) =  (*var_fc).x1f(k,(jl+j-1),i);
       }
     }
   }

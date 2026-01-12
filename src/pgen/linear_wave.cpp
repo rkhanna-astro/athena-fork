@@ -74,6 +74,7 @@ Real MaxV2(MeshBlock *pmb, int iout);
 
 // AMR refinement condition
 int RefinementCondition(MeshBlock *pmb);
+Real DivergenceB(MeshBlock *pmb, int out);
 
 //========================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -186,6 +187,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   // primarily used for tests of decaying linear waves (might conditionally enroll):
   AllocateUserHistoryOutput(1);
   EnrollUserHistoryOutput(0, MaxV2, "max-v2", UserHistoryOperation::max);
+  EnrollUserHistoryOutput(0, DivergenceB, "divB");
   // EnrollUserBoundaryFunction(BoundaryFace::inner_x2, DMRInnerX2);
   return;
 }
@@ -574,8 +576,9 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   for (int k=ks; k<=ke; k++) {
     // Real linear_density = 1.0;
     Real y_grid = 0.0;
-    Real step = 1.0 / 256.0;
-    Real scale_height = (iso_cs * iso_cs) / 1.0;
+    Real step = 1.0 / 512.0;
+    Real g = 1.0;
+    Real scale_height = (iso_cs * iso_cs) / g;
 
     for (int j=js; j<=je; j++) {
       // linear_density = 1.0;
@@ -604,12 +607,22 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         // if (perturb > amp or perturb < -amp) {
         //   perturb = 0.0;
         // }
-        if (prob(gen) > 0.01){ 
-          phydro->u(IDN, k, j, i) = std::exp( - y_grid / scale_height) + amp * dis(gen);
-        }
-        else {
-          phydro->u(IDN, k, j, i) = std::exp( - y_grid / scale_height);
-        }
+        phydro->u(IDN, k, j, i) = d0 * std::exp( - y_grid / scale_height) + amp * dis(gen);
+        // if (y_grid >= 0.5) {
+        //   phydro->u(IDN, k, j, i) = std::exp( - y_grid / scale_height) + amp * dis(gen);
+        // }
+        // else {
+        //   phydro->u(IDN, k, j, i) = std::exp( - y_grid / scale_height);
+        // }
+
+        // phydro->u(IDN, k, j, i) = d0 + amp * dis(gen);
+
+        // if (prob(gen) > 0.01){ 
+        //   phydro->u(IDN, k, j, i) = std::exp( - y_grid / scale_height) + amp * dis(gen);
+        // }
+        // else {
+        //   phydro->u(IDN, k, j, i) = std::exp( - y_grid / scale_height);
+        // }
 
         // Hyperbolic Secant Density Variation:
         // phydro->u(IDN, k, j, i) = 1.0 / std::cosh(M_PI * exp_value/ 2.0);
@@ -633,30 +646,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       }
       // linear_density -= step;
       y_grid += step;
+      std::cout << "Grid: " << y_grid << std::endl;
     }
   }
   return;
 }
-
-// void DMRInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
-//   Real time, Real dt,
-//   int il, int iu, int jl, int ju, int kl, int ku, int ngh) {
-//     Real amplitude = 0.01;             // Max perturbation strength
-//     Real frequency = 2.0 * M_PI / 1.0;  // One cycle per time unit
-
-//     Real perturb = amplitude * std::sin(frequency * time / 10.0);
-
-//     // copy face-centered magnetic fields into ghost zones
-//     for (int k=kl; k<=ku; ++k) {
-//       for (int j=1; j<=ngh; ++j) {
-// #pragma omp simd
-//         for (int i=il; i<=iu; ++i) {
-//           b.x1f(k, jl-j, i) = perturb;
-//         }
-//       }
-//     }
-//   return;
-// }
 
 namespace {
 //----------------------------------------------------------------------------------------
@@ -1286,3 +1280,35 @@ void MeshBlock::UserWorkBeforeOutput(ParameterInput *pin) {
   }
   return;
 }
+
+Real DivergenceB(MeshBlock *pmb, int iout)
+{
+  Real divb=0;
+  int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
+  AthenaArray<Real> face1, face2p, face2m, face3p, face3m;
+  FaceField &b = pmb->pfield->b;
+
+  face1.NewAthenaArray((ie-is)+2*NGHOST+2);
+  face2p.NewAthenaArray((ie-is)+2*NGHOST+1);
+  face2m.NewAthenaArray((ie-is)+2*NGHOST+1);
+  face3p.NewAthenaArray((ie-is)+2*NGHOST+1);
+  face3m.NewAthenaArray((ie-is)+2*NGHOST+1);
+
+  for(int k=ks; k<=ke; k++) {
+    for(int j=js; j<=je; j++) {
+      pmb->pcoord->Face1Area(k,   j,   is, ie+1, face1);
+      pmb->pcoord->Face2Area(k,   j+1, is, ie,   face2p);
+      pmb->pcoord->Face2Area(k,   j,   is, ie,   face2m);
+      pmb->pcoord->Face3Area(k+1, j,   is, ie,   face3p);
+      pmb->pcoord->Face3Area(k,   j,   is, ie,   face3m);
+      for(int i=is; i<=ie; i++) {
+        divb+=(face1(i+1)*b.x1f(k,j,i+1)-face1(i)*b.x1f(k,j,i)
+              +face2p(i)*b.x2f(k,j+1,i)-face2m(i)*b.x2f(k,j,i)
+              +face3p(i)*b.x3f(k+1,j,i)-face3m(i)*b.x3f(k,j,i));
+      }
+    }
+  }
+
+  return divb;
+}
+

@@ -11,7 +11,7 @@ from scipy.fft import fft, fftshift
 from astropy.timeseries import LombScargle
 from scipy.signal import welch
 
-spacing = [400]
+spacing = [150]
 
 time_step = 0
 
@@ -64,8 +64,8 @@ for space in spacing:
 
             magnetic_plot[int(x / 16)] = (magnetic_field_y[x-1] + magnetic_field_y[x] + magnetic_field_y[x+1]) / 3.0
 
-            plot_velocity_x[int(x / 16)] = ((velocity_x[x-1] + velocity_x[x] + velocity_x[x+1] / 3.0))**2
-            plot_velocity_y[int(x / 16)] = ((velocity_y[x-1] + velocity_y[x] + velocity_y[x+1] / 3.0))**2
+            plot_velocity_x[int(x / 16)] = ((velocity_x[x-1] + velocity_x[x] + velocity_x[x+1] / 3.0))
+            plot_velocity_y[int(x / 16)] = ((velocity_y[x-1] + velocity_y[x] + velocity_y[x+1] / 3.0))
     # print(averaged_number_density)
 
 
@@ -79,7 +79,7 @@ for space in spacing:
 # density_power = ls.power(freqs)
 
 
-for ind in range(16, size, 16):
+for ind in range(127, size, 16):
     i = int(ind / 16)
     print(i)
 
@@ -101,10 +101,11 @@ for ind in range(16, size, 16):
     vx = plot_velocity_x[i]
     vy = plot_velocity_y[i]
 
-    v_mag = np.sqrt(vx + vy)
-    v_rms = np.sqrt(np.mean(v_mag**2))
-    dispersion = np.std(v_mag)
-    smoothed_profile = gaussian_filter1d(v_mag, sigma=4.0)
+    # v_mag = np.sqrt(vx + vy)
+    # v_rms = np.sqrt(np.mean(v_mag**2))
+    # dispersion = np.std(v_mag)
+    smoothed_profile_x = gaussian_filter1d(vx, sigma=4.0)
+    smoothed_profile_y = gaussian_filter1d(vy, sigma=4.0)
     # mean_v = np.mean(v_mag)
 
     plt.figure(figsize=(8, 8))
@@ -121,18 +122,20 @@ for ind in range(16, size, 16):
     # # plt.show()
     # plt.savefig(f'power_spectra_comparison_{i}.png', dpi=300, bbox_inches='tight')
 
-    plt.plot(grid_x, v_mag, label="velocity_magnitude")
-    plt.axhline(v_rms, color='red', linestyle="--", label=f'v_rms = {v_rms:.4f}')
-    plt.fill_between(grid_x, v_rms - dispersion, v_rms + dispersion, color = 'grey', alpha = 0.3, label ='dispersion region')
-    plt.plot(grid_x, smoothed_profile, label="smooth velocity magnitude profile")
+    plt.plot(grid_x, vx, label="velocity_x")
+    plt.plot(grid_x, vy, label="velocity_y")
+    # plt.axhline(v_rms, color='red', linestyle="--", label=f'v_rms = {v_rms:.4f}')
+    # plt.fill_between(grid_x, v_rms - dispersion, v_rms + dispersion, color = 'grey', alpha = 0.3, label ='dispersion region')
+    # plt.plot(grid_x, smoothed_profile_x, label="smooth Vx profile")
+    # plt.plot(grid_x, smoothed_profile_y, label="smooth Vy profile")
     plt.legend()
     plt.xlabel("x (pc)")
-    plt.ylabel("velocity rms")
-    plt.title(f'Velocity variation perpendicular to striations (time = {time_evolved:.4f})')
+    plt.ylabel("velocity (km/s)")
+    plt.title(f'Velocity variations (time = {time_evolved:.4f})')
     plt.grid(True, which="both", ls="--", alpha=0.5)
     plt.tight_layout()
     # plt.show()
-    plt.savefig(f'velocity_{i}.png', dpi=300, bbox_inches='tight')
+    plt.savefig(f'velocity_components_{i}.png', dpi=300, bbox_inches='tight')
     plt.close()
 
 

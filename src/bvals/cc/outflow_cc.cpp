@@ -69,20 +69,25 @@ void CellCenteredBoundaryVariable::OutflowInnerX2(
   for (int n=0; n<=nu_; ++n) {
     for (int k=kl; k<=ku; ++k) {
       Real y_grid = 0.0;
-      Real step = 1.0 / 256.0;
+      Real step = 1.0 / 512.0;
       Real scale_height = (iso_cs * iso_cs) / g;
 
       for (int j=1; j<=ngh; ++j) {
 #pragma omp simd
-        y_grid -= step;
         for (int i=il; i<=iu; ++i) {
           if (n == IDN) {
             (*var_cc)(IDN,k,jl-j,i) = std::exp(-y_grid / scale_height);
+            // (*var_cc)(IDN,k,jl-j,i) = 1.0;
           }
+          // else if (n == IVY) {
+          //   (*var_cc)(IVY,k,jl-j,i) = 0.0;
+          // }
           else {
             (*var_cc)(n,k,jl-j,i) = (*var_cc)(n,k,jl,i);
           }
+          // (*var_cc)(n,k,jl-j,i) = (*var_cc)(n,k,jl,i);
         }
+        y_grid -= step;
       }
     }
   }
@@ -102,20 +107,30 @@ void CellCenteredBoundaryVariable::OutflowOuterX2(
   for (int n=0; n<=nu_; ++n) {
     for (int k=kl; k<=ku; ++k) {
       Real y_grid = 1.0;
-      Real step = 1.0 / 256.0;
+      Real step = 1.0 / 512.0;
       Real scale_height = (iso_cs * iso_cs) / g;
 
       for (int j=1; j<=ngh; ++j) {
 #pragma omp simd
-        y_grid += step;
         for (int i=il; i<=iu; ++i) {
+          // // if (n == IDN) {
+          // //   (*var_cc)(IDN,k,ju+j,i) = std::exp(-y_grid / scale_height);
+          // // }
+          // // else {
+          // //   (*var_cc)(n,k,ju+j,i) = (*var_cc)(n,k,ju,i);
+          // // }
           if (n == IDN) {
             (*var_cc)(IDN,k,ju+j,i) = std::exp(-y_grid / scale_height);
           }
+          // // else if (n == IVY) {
+          // //   (*var_cc)(IVY,k,ju+j,i) = 0.0;
+          // // }
           else {
             (*var_cc)(n,k,ju+j,i) = (*var_cc)(n,k,ju,i);
           }
+          // (*var_cc)(n,k,ju+j,i) = (*var_cc)(n,k,ju,i);
         }
+        y_grid += step;
       }
     }
   }
